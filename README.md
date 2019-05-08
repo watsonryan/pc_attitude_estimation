@@ -1,3 +1,3 @@
 # pc_attitude_estimation
 
-Approximate a segmented point clouds orientation using SVD plane fitting.
+Approximate a segmented point clouds orientation through plane fitting.
