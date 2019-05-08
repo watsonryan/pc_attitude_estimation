@@ -27,6 +27,7 @@ get_attitude_est(attitude_estimation::GetAttitudeEst::Request  &req,
                  attitude_estimation::GetAttitudeEst::Response &res)
 {
         res.status = 0;
+        std::vector<Eigen::Matrix3d> rot_mat_vec;
         for(int i=0; i<req.point_clouds.size(); i++)
         {
                 auto curr_point_cloud = req.point_clouds[i];
@@ -65,17 +66,21 @@ get_attitude_est(attitude_estimation::GetAttitudeEst::Request  &req,
                 model->optimizeModelCoefficients (inliers, coeff, coeff_refined);
                 cout << coeff_refined << endl;
 
-                Vector3d plane_normal = (Vector3d() << coeff_refined(0), coeff_refined(1), coeff_refined(2)).finished();
+                Eigen::Vector3d plane_normal = (Eigen::Vector3d() << coeff_refined(0), coeff_refined(1), coeff_refined(2)).finished();
 
-                Vector3d frame_normal = (Vector3d() << 0,0,1).finished();
+                Eigen::Vector3d frame_normal = (Eigen::Vector3d() << 0,0,1).finished();
 
-                Vector3d plane_attitude = get_attitude_euler(plane_normal, frame_normal);
+                Eigen::Matrix3d rot_mat = get_rotation_mat(plane_normal, frame_normal);
+
+                unsigned int id = 0;
+                rot_mat_vec.push_back(std::make_pair(id, rot_mat));
         }
 
 
-        // att_pub_ = nh.advertise<attitude_estimation::attitude_est>( "pc_attitude_estimation", 10, false);
-        // send_attitude_est(res, att_pub_);
+        att_pub_ = nh.advertise<attitude_estimation::AttitudeEstVec>( "pc_attitude_estimation", 10, false);
+        send_attitude_est(res, att_pub_);
 
+        rot_mat_vec.clear();
         res.status = 1;
         return true;
 }
@@ -83,46 +88,38 @@ get_attitude_est(attitude_estimation::GetAttitudeEst::Request  &req,
 //////////////////////////
 // Start Helper Methods //
 //////////////////////////
-// void AttitudeEstimation::send_attitude_est(attitude_estimation::GetAttitudeEst::Response &res, const ros::Publisher& pub)
-// {
-//         attitude_estimation::attitude_est est;
-//         auto timestamp = ros::Time::now();
-//         for (int i=0; i<map_.size(); i++)
-//         {
-//                 flower.id = map_[i].first;
-//                 unsigned int flower_index = map_[i].first;
-//                 gtsam::Pose3 flower_pose_est = map_[i].second;
-//                 auto graph_iter = std::find_if(graphs_.begin(), graphs_.end(), [flower_index] (const std::tuple<unsigned int, int, gtsam::NonlinearFactorGraph, gtsam::Values, unsigned int, double>&g) {return std::get<0>(g) == flower_index; });
-//
-//                 if (std::get<4>(*graph_iter)>=observation_thresh)
-//                 {
-//                         gtsam::Vector3 position = flower_pose_est.translation();
-//                         gtsam::Vector4 attitude = flower_pose_est.rotation().quaternion();
-//
-//                         flower.header.frame_id = world_frame;
-//                         flower.header.stamp = timestamp;
-//
-//                         flower.num_obs = std::get<4>(*graph_iter);
-//                         flower.prob = std::get<5>(*graph_iter);
-//
-//                         flower.pose.position.x = position[0];
-//                         flower.pose.position.y = position[1];
-//                         flower.pose.position.z = position[2];
-//
-//                         flower.pose.orientation.w = attitude[0];
-//                         flower.pose.orientation.x = attitude[1];
-//                         flower.pose.orientation.y = attitude[2];
-//                         flower.pose.orientation.z = attitude[3];
-//
-//                         flower_map.map.push_back(flower);
-//                         res.map.push_back(flower);
-//                 }
-//         }
-//         if(pub.getNumSubscribers() != 0) { pub.publish(flower_map); }
-//         flower_map.map.clear();
-// }
+void AttitudeEstimation::send_attitude_est(attitude_estimation::GetAttitudeEst::Response &res, const clusters_att& att_est, const ros::Publisher& pub)
+{
+        attitude_estimation::AttitudeEst est;
+        attitude_estimation::AttitudeEstVec est_vec;
 
-Eigen::Vector3d AttitudeEstimation::get_attitude_euler(Eigen::Vector3f n1, Eigen::Vector3f n2)
+        auto timestamp = ros::Time::now();
+        for (int i=0; i<att_est.size(); i++)
+        {
+                est.id = clusters_att[i].first;
+
+                est.header.frame_id = "world";
+                est.header.stamp = timestamp;
+
+                auto e = get_euler(cluster_att[i].second);
+                est.euler.x = e[0];
+                est.euler.y = e[1];
+                est.euler.z = e[2];
+
+                auto q = get_quat(cluster_att[i].second);
+                est.quat.orientation.w = q[0];
+                est.quat.orientation.x = q[1];
+                est.quat.orientation.y = q[2];
+                est.quat.orientation.z = q[3];
+
+                est_vec.AttitudeEstVec.push_back(est);
+                res.AttitudeEstVec.push_back(est);
+        }
+        if(pub.getNumSubscribers() != 0) { pub.publish(est_vec); }
+        est_vec.AttitudeEstVec.clear();
+}
+
+Eigen::Matrix3d AttitudeEstimation::get_rotation_mat(Eigen::Vector3f n1, Eigen::Vector3f n2)
 {
 
         // https://math.stackexchange.com/questions/180418/calculate-rotation-matrix-to-align-vector-a-to-vector-b-in-3d
@@ -133,9 +130,16 @@ Eigen::Vector3d AttitudeEstimation::get_attitude_euler(Eigen::Vector3f n1, Eigen
         Eigen::Matrix3d skew_symm;
         skew_symm << (Matrix3d() << 0, -v(2), v(1), v(2), 0, -v(0), -v(1), v(0), 0 ).finished();
 
-        Eigen::Matrix3d rot_m =  Eigen::MatrixXd::Identity(3,3) + skew_symm + (skew_symm.pow(2) * ((1-c)/s*s) );
+        return Eigen::MatrixXd::Identity(3,3) + skew_symm + (skew_symm.pow(2) * ((1-c)/s*s) );
+}
 
-        return Vector3d euler = rot_m.eulerAngles(2, 1, 0);
+Eigen::Quaterniond AttitudeEstimation::get_quat(Eigen::Matrix3d rot) {
+        Quaterniond q;
+        return q=mat;
+}
+
+Eigen::Vector3d AttitudeEstimation::get_euler(Eigen::Matrix3d rot) {
+        return rot.eulerAngles(2,1,0);
 }
 
 bool AttitudeEstimation::load_parameters(const ros::NodeHandle& nh)

@@ -1,4 +1,4 @@
 sensor_msgs/PointCloud2[] point_clouds
 ---
 uint8 status
-pc_attitude_estimation/attitude_est[] attitude
+pc_attitude_estimation/attitude_est[] AttitudeEstVec

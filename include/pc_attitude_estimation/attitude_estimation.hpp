@@ -44,6 +44,8 @@ bool load_parameters(const ros::NodeHandle& nh);
 ros::NodeHandle nh;
 ros::ServiceServer attitudeEstServ;
 
+typedef std::vector< std::pair<unsigned, Eigen::Matrix3d> > clusters_att;
+
 private:
 
 ros::Publisher att_pub_;
