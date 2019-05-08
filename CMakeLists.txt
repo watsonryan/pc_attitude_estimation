@@ -32,7 +32,8 @@ find_package(kinova_driver REQUIRED)
 
 add_message_files(
 	FILES
-	attitude_est.msg
+	AttitudeEst.msg
+	AttitudeEstVec.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -44,7 +45,7 @@ add_service_files(
 ## Generate actions in the 'action' folder
 add_action_files(
   DIRECTORY action
-  FILES BuildMap.action
+  FILES GetAttitude.action
 )
 
 ## Generate added messages and services with any dependencies listed here
@@ -80,44 +81,21 @@ link_directories(
   ${catkin_LIBRARY_DIRS}
 )
 ## Declare a C++ library
-add_library(build_map_action src/build_map_action.cpp)
-target_link_libraries(build_map_action
+add_library(attitude_estimation src/attitude_estimation.cpp)
+target_link_libraries(attitude_estimation
 	${catkin_LIBRARIES}
 	${Boost_LIBRARIES}
 	${kinova_driver_LIBRARIES}
 )
 
 ## Declare a C++ executable
-add_executable(build_map_action_node src/build_map_action_node.cpp)
-target_link_libraries(build_map_action_node
+add_executable(attitude_estimation src/attitude_estimation_node.cpp)
+target_link_libraries(attitude_estimation_node
 	${catkin_LIBRARIES}
-	build_map_action
-)
-
-## Declare a C++ library
-add_library(flower_mapper src/flower_mapper.cpp)
-target_link_libraries(flower_mapper
-	${catkin_LIBRARIES}
-	${Boost_LIBRARIES}
-	${kinova_driver_LIBRARIES}
-)
-
-## Declare a C++ executable
-add_executable(flower_mapper_node src/flower_mapper_node.cpp)
-target_link_libraries(flower_mapper_node
-	${catkin_LIBRARIES}
-	flower_mapper
-)
-
-## Declare a C++ executable
-add_executable(test_build_map src/test_build_map.cpp)
-target_link_libraries(test_build_map
-	${catkin_LIBRARIES}
-	build_map_action
+	attitude_estimation
 )
 
 #############
 ## Install ##
 #############
-install(TARGETS build_map_action DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-install(TARGETS flower_mapper DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(TARGETS attitude_estimation DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
