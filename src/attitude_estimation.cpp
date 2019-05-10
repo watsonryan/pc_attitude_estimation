@@ -27,7 +27,6 @@ get_attitude_est(attitude_estimation::GetAttitudeEst::Request  &req,
                  attitude_estimation::GetAttitudeEst::Response &res)
 {
         res.status = 0;
-        std::vector<Eigen::Matrix3d> rot_mat_vec;
         for(int i=0; i<req.point_clouds.size(); i++)
         {
                 auto curr_point_cloud = req.point_clouds[i];
@@ -73,14 +72,14 @@ get_attitude_est(attitude_estimation::GetAttitudeEst::Request  &req,
                 Eigen::Matrix3d rot_mat = get_rotation_mat(plane_normal, frame_normal);
 
                 unsigned int id = 0;
-                rot_mat_vec.push_back(std::make_pair(id, rot_mat));
+                rot_mat_vec_.push_back(std::make_pair(id, rot_mat));
         }
 
 
         att_pub_ = nh.advertise<attitude_estimation::AttitudeEstVec>( "pc_attitude_estimation", 10, false);
         send_attitude_est(res, att_pub_);
 
-        rot_mat_vec.clear();
+        rot_mat_vec_.clear();
         res.status = 1;
         return true;
 }
@@ -88,7 +87,9 @@ get_attitude_est(attitude_estimation::GetAttitudeEst::Request  &req,
 //////////////////////////
 // Start Helper Methods //
 //////////////////////////
-void AttitudeEstimation::send_attitude_est(attitude_estimation::GetAttitudeEst::Response &res, const clusters_att& att_est, const ros::Publisher& pub)
+
+// publish attitude message
+void AttitudeEstimation::send_attitude_est(attitude_estimation::GetAttitudeEst::Response &res, clusters_att& att_est, const ros::Publisher& pub)
 {
         attitude_estimation::AttitudeEst est;
         attitude_estimation::AttitudeEstVec est_vec;
@@ -96,17 +97,19 @@ void AttitudeEstimation::send_attitude_est(attitude_estimation::GetAttitudeEst::
         auto timestamp = ros::Time::now();
         for (int i=0; i<att_est.size(); i++)
         {
-                est.id = clusters_att[i].first;
+                est.id = rot_mat_vec_[i].first;
 
                 est.header.frame_id = "world";
                 est.header.stamp = timestamp;
 
-                auto e = get_euler(cluster_att[i].second);
+                auto r = rot_mat_vec_[i].second;
+
+                auto e = get_euler(r);
                 est.euler.x = e[0];
                 est.euler.y = e[1];
                 est.euler.z = e[2];
 
-                auto q = get_quat(cluster_att[i].second);
+                auto q = get_quat(r);
                 est.quat.orientation.w = q[0];
                 est.quat.orientation.x = q[1];
                 est.quat.orientation.y = q[2];
@@ -119,6 +122,8 @@ void AttitudeEstimation::send_attitude_est(attitude_estimation::GetAttitudeEst::
         est_vec.AttitudeEstVec.clear();
 }
 
+
+// rotate estimated normal vector to the basis normal vector
 Eigen::Matrix3d AttitudeEstimation::get_rotation_mat(Eigen::Vector3f n1, Eigen::Vector3f n2)
 {
 
@@ -130,14 +135,18 @@ Eigen::Matrix3d AttitudeEstimation::get_rotation_mat(Eigen::Vector3f n1, Eigen::
         Eigen::Matrix3d skew_symm;
         skew_symm << (Matrix3d() << 0, -v(2), v(1), v(2), 0, -v(0), -v(1), v(0), 0 ).finished();
 
+        // Rodrigues' Formula for rotation matrix
+        // see "Constructing Rotation Matrices using Power Series" p.g., 11
         return Eigen::MatrixXd::Identity(3,3) + skew_symm + (skew_symm.pow(2) * ((1-c)/s*s) );
 }
 
+// get quaternion representation from rotation matrix
 Eigen::Quaterniond AttitudeEstimation::get_quat(Eigen::Matrix3d rot) {
         Quaterniond q;
         return q=mat;
 }
 
+// get euler representation from rotation matrix
 Eigen::Vector3d AttitudeEstimation::get_euler(Eigen::Matrix3d rot) {
         return rot.eulerAngles(2,1,0);
 }

@@ -39,6 +39,9 @@ bool get_attitude_est(attitude_estimation::UpdateFlowerMap::Request  &req,
 
 void send_attitude_est(attitude_estimation::UpdateFlowerMap::Response &res, const ros::Publisher& pub);
 
+Eigen::Vector3d AttitudeEstimation::get_euler(Eigen::Matrix3d rot);
+Eigen::Quaterniond AttitudeEstimation::get_quat(Eigen::Matrix3d rot);
+
 bool load_parameters(const ros::NodeHandle& nh);
 
 ros::NodeHandle nh;
@@ -49,6 +52,7 @@ typedef std::vector< std::pair<unsigned, Eigen::Matrix3d> > clusters_att;
 private:
 
 ros::Publisher att_pub_;
+std::vector<Eigen::Matrix3d> rot_mat_vec_;
 
 // yaml defined input params.
 double distance_thresh;
